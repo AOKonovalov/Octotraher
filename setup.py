@@ -19,6 +19,8 @@ setuptools.setup(
 		'Programming Language :: Python :: 3.8',
 		'Programming Language :: Python :: 3.9',
 		'Programming Language :: Python :: 3.10',
+		'Programming Language :: Python :: 3.11',
+		'Programming Language :: Python :: 3.12',
 	],
 	packages = ['octotraher', 'octotraher.modules'],
 	install_requires = [
@@ -28,7 +30,7 @@ setuptools.setup(
 		'pytz; python_version < "3.9.0"',
 		'filelock',
 	],
-	python_requires = '~=3.8',
+	python_requires = '>=3.8',
 	extras_require = {
 		'test': ['coverage'],
 	},

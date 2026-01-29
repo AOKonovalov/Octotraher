@@ -37,11 +37,43 @@ pip install -e .
 
 Если вы хотите установить напрямую из Git репозитория:
 
+**Для публичного репозитория:**
 ```bash
 pip install git+https://github.com/AOKonovalov/Octotraher.git
 ```
 
-Замените `yourusername` на ваш реальный GitHub username.
+**Для приватного репозитория:**
+
+**Через HTTPS с токеном доступа:**
+
+1. Создайте Personal Access Token на GitHub: https://github.com/settings/tokens
+   - Нажмите "Generate new token (classic)"
+   - Выберите права: `repo` (для доступа к приватным репозиториям)
+
+2. Установка через переменную окружения (рекомендуется):
+
+   Windows PowerShell:
+   ```powershell
+   $env:GIT_TOKEN="{YOUR_TOKEN}"
+   pip install git+https://$env:GIT_TOKEN@github.com/AOKonovalov/Octotraher.git
+   ```
+   
+   Windows CMD:
+   ```cmd
+   set GIT_TOKEN={YOUR_TOKEN}
+   pip install git+https://%GIT_TOKEN%@github.com/AOKonovalov/Octotraher.git
+   ```
+   
+   Linux/Mac:
+   ```bash
+   export GIT_TOKEN="{YOUR_TOKEN}"
+   pip install git+https://${GIT_TOKEN}@github.com/AOKonovalov/Octotraher.git
+   ```
+
+   Или напрямую (менее безопасно):
+   ```bash
+   pip install git+https://{YOUR_TOKEN}@github.com/AOKonovalov/Octotraher.git
+   ```
 
 ### Установка из исходного дистрибутива
 

@@ -93,47 +93,87 @@ def parse_telegram_channels(channels: List[str], limit: int = 10, time_minutes_f
                     media_items = msg_media if isinstance(msg_media, (list, tuple)) else [msg_media]
                     
                     # Сначала собираем уникальные URL
-                    unique_media_urls = []
+                    # Для видео сохраняем кортеж (video_url, thumbnail_url), для фото - просто url
+                    unique_media_items = []
                     for media_item in media_items:
                         if media_item is None:
                             continue
                         
-                        media_url = None
-                        
                         # Обрабатываем только Photo и Video, остальное пропускаем
                         if isinstance(media_item, telegram.Photo):
                             media_url = media_item.url
+                            if media_url and media_url not in media_urls_seen:
+                                media_urls_seen.add(media_url)
+                                unique_media_items.append(('photo', media_url, None))
                         elif isinstance(media_item, telegram.Video):
-                            media_url = getattr(media_item, 'url', None)
+                            video_url = getattr(media_item, 'url', None)
+                            thumbnail_url = getattr(media_item, 'thumbnailUrl', None)
+                            # Для видео сохраняем оба URL, если есть
+                            if video_url and video_url not in media_urls_seen:
+                                media_urls_seen.add(video_url)
+                                unique_media_items.append(('video', video_url, thumbnail_url))
+                            elif thumbnail_url and thumbnail_url not in media_urls_seen:
+                                # Если нет video_url, но есть thumbnail, сохраняем только thumbnail
+                                media_urls_seen.add(thumbnail_url)
+                                unique_media_items.append(('video', None, thumbnail_url))
                         else:
                             continue  # Пропускаем остальные типы
-                        
-                        # Дедупликация по URL
-                        if media_url and media_url not in media_urls_seen:
-                            media_urls_seen.add(media_url)
-                            unique_media_urls.append(media_url)
                     
                     # Скачиваем только уникальные медиа (параллельно)
-                    if unique_media_urls:
-                        def download_media(media_url):
-                            """Функция для скачивания одного медиа файла (макс. 5 МБ)"""
+                    if unique_media_items:
+                        def download_media(media_type, media_url, thumbnail_url):
+                            """Функция для скачивания одного медиа файла (макс. 5 МБ)
+                            Для видео больше 5 МБ скачивает превью как фото
+                            """
                             max_retries = 2
                             MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 МБ в байтах
                             
+                            # Определяем, какой URL скачивать
+                            # Если нет media_url, используем thumbnail_url (для видео без прямого URL)
+                            url_to_download = media_url or thumbnail_url
+                            
+                            if not url_to_download:
+                                return None  # Нет URL для скачивания
+                            
+                            # Для видео сначала проверяем размер через HEAD запрос
+                            if media_type == 'video' and media_url:
+                                try:
+                                    head_response = requests.head(media_url, timeout=10, allow_redirects=True)
+                                    content_length = head_response.headers.get('Content-Length')
+                                    if content_length:
+                                        file_size = int(content_length)
+                                        # Если видео больше 5 МБ и есть превью, используем превью
+                                        if file_size > MAX_FILE_SIZE and thumbnail_url:
+                                            url_to_download = thumbnail_url
+                                except:
+                                    # Если HEAD не работает, будем проверять при скачивании
+                                    pass
+                            
+                            # Скачиваем файл
                             for attempt in range(max_retries + 1):
                                 try:
-                                    # Небольшая случайная задержка перед запросом (0-0.5 сек) для снижения нагрузки
                                     if attempt == 0:
-                                        time.sleep(0.1 * (hash(media_url) % 5))  # 0-0.4 сек случайная задержка
+                                        time.sleep(0.1 * (hash(url_to_download) % 5))
                                     
-                                    response = requests.get(media_url, timeout=15)  # Уменьшил таймаут до 15 сек
+                                    response = requests.get(url_to_download, timeout=15, stream=True)
                                     response.raise_for_status()
                                     
-                                    # Размер файла из заголовка (если есть)
+                                    # Проверяем размер из заголовка
                                     content_length = response.headers.get('Content-Length')
                                     file_size = int(content_length) if content_length else None
                                     
-                                    # Проверяем размер ДО скачивания
+                                    # Если это видео, размер больше 5 МБ и есть превью - переключаемся на превью
+                                    if (media_type == 'video' and media_url and url_to_download == media_url and 
+                                        file_size and file_size > MAX_FILE_SIZE and thumbnail_url):
+                                        response.close()
+                                        url_to_download = thumbnail_url
+                                        # Повторяем запрос с превью
+                                        response = requests.get(thumbnail_url, timeout=15)
+                                        response.raise_for_status()
+                                        content_length = response.headers.get('Content-Length')
+                                        file_size = int(content_length) if content_length else None
+                                    
+                                    # Проверяем размер ДО полного скачивания
                                     if file_size and file_size > MAX_FILE_SIZE:
                                         return None
                                     
@@ -142,26 +182,35 @@ def parse_telegram_channels(channels: List[str], limit: int = 10, time_minutes_f
                                     
                                     # Проверяем реальный размер после скачивания
                                     if len(media_bytes) > MAX_FILE_SIZE:
-                                        return None
+                                        # Если это было видео и есть превью, пробуем скачать превью
+                                        if (media_type == 'video' and media_url and url_to_download == media_url and 
+                                            thumbnail_url):
+                                            url_to_download = thumbnail_url
+                                            response = requests.get(thumbnail_url, timeout=15)
+                                            response.raise_for_status()
+                                            media_bytes = response.content
+                                            if len(media_bytes) > MAX_FILE_SIZE:
+                                                return None
+                                        else:
+                                            return None
                                     
                                     return media_bytes
                                 except requests.exceptions.HTTPError as e:
                                     # Для 500/503 ошибок делаем повторную попытку
                                     if e.response.status_code in (500, 503) and attempt < max_retries:
-                                        time.sleep(0.5)  # Небольшая задержка перед повтором
+                                        time.sleep(0.5)
                                         continue
-                                    # Для других ошибок - просто пропускаем
                                     return None
                                 except Exception:
-                                    # Пропускаем файл при любой ошибке
                                     return None
                             return None
                         
                         # Параллельная загрузка медиа (до 5 потоков одновременно, чтобы не получить бан)
                         # Медиа скачиваются с CDN Telegram, но все равно нужно быть осторожным
                         with ThreadPoolExecutor(max_workers=5) as executor:
-                            future_to_url = {executor.submit(download_media, url): url for url in unique_media_urls}
-                            for future in as_completed(future_to_url):
+                            future_to_item = {executor.submit(download_media, item_type, item_url, item_thumbnail): (item_type, item_url, item_thumbnail) 
+                                             for item_type, item_url, item_thumbnail in unique_media_items}
+                            for future in as_completed(future_to_item):
                                 media_bytes = future.result()
                                 if media_bytes:
                                     media_data.append(media_bytes)  # Добавляем в массив bytes

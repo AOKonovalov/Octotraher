@@ -20,14 +20,67 @@ pip install -e .
 
 Если проект размещен на GitHub или другом Git-хостинге:
 
+**Для публичного репозитория:**
 ```bash
-pip install git+https://github.com/ваш-username/octotraher.git
+pip install git+https://github.com/AOKonovalov/Octotraher.git
 ```
 
-Или для конкретной ветки:
+**Для приватного репозитория:**
 
+**Через HTTPS с токеном доступа (рекомендуется):**
+
+1. **Создайте Personal Access Token на GitHub:**
+   - Перейдите: https://github.com/settings/tokens
+   - Нажмите "Generate new token" → "Generate new token (classic)"
+   - Выберите права: `repo` (для доступа к приватным репозиториям)
+   - Скопируйте токен (он показывается только один раз!)
+
+2. **Установка через токен:**
+
+   **Вариант А: Через переменную окружения (самый безопасный способ):**
+   
+   Windows PowerShell:
+   ```powershell
+   $env:GIT_TOKEN="{YOUR_TOKEN}"
+   pip install git+https://$env:GIT_TOKEN@github.com/AOKonovalov/Octotraher.git
+   ```
+   
+   Windows CMD:
+   ```cmd
+   set GIT_TOKEN={YOUR_TOKEN}
+   pip install git+https://%GIT_TOKEN%@github.com/AOKonovalov/Octotraher.git
+   ```
+   
+   Linux/Mac:
+   ```bash
+   export GIT_TOKEN="{YOUR_TOKEN}"
+   pip install git+https://${GIT_TOKEN}@github.com/AOKonovalov/Octotraher.git
+   ```
+
+   **Вариант Б: Напрямую в команде (менее безопасно):**
+   ```bash
+   pip install git+https://{YOUR_TOKEN}@github.com/AOKonovalov/Octotraher.git
+   ```
+   ⚠️ **Внимание:** Токен может попасть в историю команд!
+
+   **Вариант В: В requirements.txt (НЕ коммитьте файл с токеном!):**
+   ```
+   git+https://{YOUR_TOKEN}@github.com/AOKonovalov/Octotraher.git
+   ```
+   Лучше использовать переменную окружения в CI/CD или локально.
+
+**Альтернатива: Локальная установка:**
 ```bash
-pip install git+https://github.com/ваш-username/octotraher.git@branch-name
+git clone https://{YOUR_TOKEN}@github.com/AOKonovalov/Octotraher.git
+cd Octotraher
+pip install -e .
+```
+
+**Для конкретной ветки или тега:**
+```bash
+pip install git+ssh://git@github.com/AOKonovalov/Octotraher.git@branch-name
+# или
+pip install git+https://<YOUR_TOKEN>@github.com/AOKonovalov/Octotraher.git@branch-name
 ```
 
 ### 3. Установка из архива
