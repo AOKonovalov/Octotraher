@@ -10,7 +10,41 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-import octotraher.modules.telegram as telegram
+# Проверка версии Python
+python_version = sys.version_info
+print(f"🐍 Python версия: {python_version.major}.{python_version.minor}.{python_version.micro}")
+print(f"   Полная версия: {sys.version}")
+if python_version.major == 3 and python_version.minor == 12:
+    print("✅ Тестирование на Python 3.12")
+elif python_version.major == 3 and python_version.minor >= 8:
+    print(f"⚠️  Внимание: используется Python {python_version.major}.{python_version.minor}, тест предназначен для Python 3.12")
+else:
+    print(f"❌ Неподдерживаемая версия Python: {python_version.major}.{python_version.minor}")
+    sys.exit(1)
+print()
+
+# Проверка импорта octotraher
+try:
+    import octotraher
+    print(f"📦 octotraher успешно импортирован")
+    try:
+        print(f"   Версия: {octotraher.__version__}")
+    except AttributeError:
+        print(f"   Версия: не указана")
+except ImportError as e:
+    print(f"❌ Ошибка импорта octotraher: {e}")
+    sys.exit(1)
+
+try:
+    import octotraher.modules.telegram as telegram
+    print(f"✅ Модуль telegram успешно импортирован")
+except ImportError as e:
+    print(f"❌ Ошибка импорта telegram модуля: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+
+print()
 
 def to_moscow_time(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
@@ -48,8 +82,9 @@ def parse_telegram_channels(channels: List[str], limit: int = 10, time_minutes_f
     """
     results: List[dict] = []
     
-    for channel in channels:
+    for channel_idx, channel in enumerate(channels, 1):
         try:
+            print(f"📡 Обработка канала {channel_idx}/{len(channels)}: {channel}")
             scraper = telegram.TelegramChannelScraper(channel)
             
             # Время для фильтрации (проверяем ДО обработки медиа)
@@ -267,8 +302,16 @@ def parse_telegram_channels(channels: List[str], limit: int = 10, time_minutes_f
                         'image': getattr(msg.linkPreview, 'image', None)
                     } if hasattr(msg, 'linkPreview') and msg.linkPreview else None
                 })
-        except Exception:
-            # Пропускаем канал без публичных постов (без логирования)
+        except KeyboardInterrupt:
+            print(f"\n⚠️  Прервано пользователем при обработке канала: {channel}")
+            raise
+        except Exception as e:
+            # Пропускаем канал с ошибками (с минимальным логированием для отладки)
+            error_type = type(e).__name__
+            if "ScraperException" in error_type or "status code" in str(e).lower():
+                print(f"   ⚠️  Канал {channel}: нет публичных постов или недоступен")
+            else:
+                print(f"   ⚠️  Канал {channel}: ошибка ({error_type}): {str(e)[:100]}")
             continue
     
     # Фильтруем по времени (дополнительная проверка на всякий случай)
@@ -334,10 +377,11 @@ if __name__ == "__main__":
     print("=" * 80)
     print("ТЕСТИРОВАНИЕ parse_telegram_channels")
     print("=" * 80)
-    print(f"Каналы: {test_channels}")
-    print(f'кол-во {len(test_channels)}')
-    print(f"Лимит: {limit} сообщений на канал")
-    print(f"Фильтр времени: {time_minutes_filter} минут")
+    print(f"🐍 Python: {python_version.major}.{python_version.minor}.{python_version.micro}")
+    print(f"📦 octotraher: {'OK' if 'octotraher' in sys.modules else 'ERROR'}")
+    print(f"📋 Каналов для парсинга: {len(test_channels)}")
+    print(f"📊 Лимит: {limit} сообщений на канал")
+    print(f"⏰ Фильтр времени: {time_minutes_filter} минут")
     print("=" * 80)
     print()
     
@@ -392,8 +436,13 @@ if __name__ == "__main__":
         print("ТЕСТИРОВАНИЕ ЗАВЕРШЕНО")
         print("=" * 80)
         
+    except KeyboardInterrupt:
+        print(f"\n⚠️  Парсинг прерван пользователем (Ctrl+C)")
+        print(f"📊 Успешно обработано сообщений до прерывания: {len(results) if 'results' in locals() else 0}")
+        sys.exit(130)  # Стандартный код выхода для KeyboardInterrupt
     except Exception as e:
         print(f"\n❌ Ошибка при парсинге: {e}")
+        print(f"   Тип ошибки: {type(e).__name__}")
         import traceback
         traceback.print_exc()
 
