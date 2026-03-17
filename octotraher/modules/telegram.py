@@ -1,4 +1,4 @@
-__all__ = ['LinkPreview', 'TelegramPost', 'Channel', 'TelegramChannelScraper']
+__all__ = ['LinkPreview', 'TelegramPost', 'Channel', 'TelegramChannelScraper', 'get_message_content_html']
 
 
 import bs4
@@ -12,6 +12,16 @@ import urllib.parse
 
 _logger = logging.getLogger(__name__)
 _SINGLE_MEDIA_LINK_PATTERN = re.compile(r'^https://t\.me/[^/]+/\d+\?single$')
+
+
+def get_message_content_html(message_element: typing.Optional[bs4.Tag]) -> typing.Optional[str]:
+	"""
+	Возвращает текст сообщения с сохранением всех HTML-тегов (жирный, курсив, ссылки, код и т.д.).
+	message_element — BeautifulSoup Tag, например div с классом tgme_widget_message_text.
+	"""
+	if message_element is None:
+		return None
+	return message_element.decode_contents()
 _STYLE_MEDIA_URL_PATTERN = re.compile(r'url\(\'(.*?)\'\)')
 
 @dataclasses.dataclass
@@ -98,9 +108,10 @@ class Gif(Medium):
 class TelegramChannelScraper(octotraher.base.Scraper):
 	name = 'telegram-channel'
 
-	def __init__(self, name, **kwargs):
+	def __init__(self, name, content_as_html: bool = False, **kwargs):
 		super().__init__(**kwargs)
 		self._name = name
+		self._content_as_html = content_as_html
 		self._headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36'}
 		self._initialPage = None
 		self._initialPageSoup = None
@@ -186,7 +197,7 @@ class TelegramChannelScraper(octotraher.base.Scraper):
 				forwarded = Channel(username = forwardedName)
 
 			if (message := post.find('div', class_ = 'tgme_widget_message_text')):
-				content = message.get_text(separator="\n")
+				content = get_message_content_html(message) if self._content_as_html else message.get_text(separator="\n")
 			else:
 				content = None
 
